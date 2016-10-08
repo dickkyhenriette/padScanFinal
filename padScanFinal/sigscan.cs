@@ -60,6 +60,8 @@ namespace padScanFinal
             public ushort processorLevel;
             public ushort processorRevision;
         }
+        private static byte[] _buffer = new byte[0];
+
         private static byte[] ToByteArray(string value)
         {
             char[] charArr = value.ToCharArray();
@@ -103,13 +105,11 @@ namespace padScanFinal
                 // 28 = sizeof(MEMORY_BASIC_INFORMATION)
                 VirtualQueryEx(processHandle, proc_min_address, out mem_basic_info, 28);
                 // if this memory chunk is accessible
-                if (mem_basic_info.Protect ==
-                PAGE_READWRITE && mem_basic_info.State == MEM_COMMIT)
+                if (mem_basic_info.Protect == PAGE_READWRITE && mem_basic_info.State == MEM_COMMIT)
                 {
                     byte[] buffer = new byte[mem_basic_info.RegionSize];
                     // read everything in the buffer above
-                    ReadProcessMemory((int)processHandle,
-                    mem_basic_info.BaseAddress, buffer, mem_basic_info.RegionSize, ref bytesRead);
+                    ReadProcessMemory((int)processHandle,mem_basic_info.BaseAddress, buffer, mem_basic_info.RegionSize, ref bytesRead);
                     // then output this in the file
                     for (int i = 0; i < mem_basic_info.RegionSize; i++)
                         sw.WriteLine("0x{0} : {1}",
@@ -123,11 +123,79 @@ namespace padScanFinal
             MessageBox.Show("dump done!!");
             MessageBox.Show(bytesRead.ToString());
         }
-        public static int FindPattern(string Program, string Pattern, string Mask)
+        private static bool MaskCheck(int nOffset, byte[] btPattern, string strMask)
+        {
+            // Loop the pattern and compare to the mask and dump.
+            for (int x = 0; x < btPattern.Length; x++)
+            {
+                // If the mask char is a wildcard, just continue.
+                if (strMask[x] == '?')
+                    continue;
+
+                // If the mask char is not a wildcard, ensure a match is made in the pattern.
+                if ((strMask[x] == 'x') && (btPattern[x] != _buffer[nOffset + x]))
+                    return false;
+            }
+
+            // The loop was successful so we found the pattern.
+            return true;
+        }
+
+        public static int FindPattern(string Program, string Pattern, string strMask)
         {
             int Adress = 0;
-            //todo
-            return Adress;
+            byte[] btPattern = ToByteArray(Pattern);
+            // getting minimum & maximum address
+            SYSTEM_INFO sys_info = new SYSTEM_INFO();
+            GetSystemInfo(out sys_info);
+            IntPtr proc_min_address = sys_info.minimumApplicationAddress;
+            IntPtr proc_max_address = sys_info.maximumApplicationAddress;
+            // saving the values as long ints so I won't have to do a lot of casts later
+            long proc_min_address_l = (long)proc_min_address;
+            long proc_max_address_l = (long)proc_max_address;
+            var proc = Process.GetProcessesByName(Program);
+            if (proc.Length != 1)
+            {
+                MessageBox.Show("The Program is not running!!!");
+                return 0;
+            }
+            // opening the process with desired access level
+            IntPtr processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_WM_READ, false, proc[0].Id);
+            // this will store any information we get from VirtualQueryEx()
+            MEMORY_BASIC_INFORMATION mem_basic_info = new MEMORY_BASIC_INFORMATION();
+            int bytesRead = 0;  // number of bytes read with ReadProcessMemory
+            while (proc_min_address_l < proc_max_address_l)
+            {
+                // 28 = sizeof(MEMORY_BASIC_INFORMATION)
+                VirtualQueryEx(processHandle, proc_min_address, out mem_basic_info, 28);
+                // if this memory chunk is accessible
+                if (mem_basic_info.Protect == PAGE_READWRITE && mem_basic_info.State == MEM_COMMIT)
+                {
+                    byte[] buffer = new byte[mem_basic_info.RegionSize];
+                    // read everything in the buffer above
+                    ReadProcessMemory((int)processHandle,
+                    mem_basic_info.BaseAddress, buffer, mem_basic_info.RegionSize, ref bytesRead);
+                    // Ensure the mask and pattern lengths match.
+                    if (strMask.Length != btPattern.Length)
+                        return 0;
+
+                    // Loop the region and look for the pattern.
+                    for (int x = 0; x < buffer.Length; x++)
+                    {
+                        if (MaskCheck(x, btPattern, strMask))
+                        {
+                            // The pattern was found, return it.
+                            MessageBox.Show(Adress.ToString());
+                            return Adress;
+                            
+                        }
+                    }
+                }
+                // move to the next memory chunk
+                proc_min_address_l += mem_basic_info.RegionSize;
+                proc_min_address = new IntPtr(proc_min_address_l);
+            }
+            return 0;
         }
 
 

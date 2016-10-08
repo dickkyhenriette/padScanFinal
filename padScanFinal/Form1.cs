@@ -29,11 +29,11 @@ namespace padScanFinal
         {
             byte[] hallo = { 0x48, 0x83, 0xec, 0x00, 0xe8 };//this to get
             ///\x48\x83\xec\x00\xe8 //the code to take in
-            string hoek = "\x48\x83\xec\x00\xe8";
-            byte[] getup = sigscan.ToByteArray(hoek);
-            string getstring = BitConverter.ToString(getup,0);
+            //string hoek = "\x48\x83\xec\x00\xe8";
+            int find = sigscan.FindPattern("notepad", "\x48\x83\xec\x00\xe8", "xxxx??xxx");
+
             string getstring2 = BitConverter.ToString(hallo, 0);
-            label1.Text = getstring;
+            label1.Text = find.ToString();
             label2.Text = getstring2;
 
 
