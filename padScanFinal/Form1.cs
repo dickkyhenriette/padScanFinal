@@ -57,6 +57,13 @@ namespace padScanFinal
             //{
             //    process.Kill();
             //}
+           
+        }
+
+        private void button5_Click(object sender, EventArgs e)
+        {
+            sigscan.Writedumpfile("notepad");
+            
         }
     }
 }
